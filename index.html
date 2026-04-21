@@ -1,0 +1,273 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>ImageGlitcher</title>
+	<meta charset="utf-8">
+	<script type="text/javascript" src="https://code.jquery.com/jquery-1.8.3.min.js"></script>
+	<script type="text/javascript" src="js/html5slider.js"></script>	
+	<script type="text/javascript" src="js/bitmapdata/Point.js"></script>
+	<script type="text/javascript" src="js/bitmapdata/Rectangle.js"></script>
+	<script type="text/javascript" src="js/bitmapdata/Matrix.js"></script>
+	<script type="text/javascript" src="js/bitmapdata/BitmapData.js"></script>
+	<script type="text/javascript" src="js/bitmapdata/filters/ColorMatrixFilter.js"></script>
+
+	<link href="css/style.css" rel="stylesheet" type="text/css">
+
+	<script>
+
+			 var _glitchAmount = 5;
+			 var _brightnessAmount = 5;
+			 var _canvas;
+			 var _context;
+			 var _inputImage;
+			 var _useScanLines = true;
+			 var _imageLoaded = false;
+			 var iw;
+			 var ih;
+
+			//init
+			$(document).ready( function() {
+
+				$('#overlay').hide();
+				_canvas = document.getElementById("canvas");
+				_context = _canvas.getContext("2d");
+
+				$('.thumb').on('dragstart', function(event) { event.preventDefault(); });
+
+				//init buttons
+				$("#glitchImage").click( function() {
+					glitchImage();
+				});
+				$("#saveImage").click( function() {
+					//open canvas image in new tab 
+					window.open(document.getElementById("canvas").toDataURL());
+				});
+				$(".thumb").click( function() {
+					loadImage("img/" + this.id + ".jpg");
+				});
+				
+				//detect for filereader drag and drop support
+				if (typeof(FileReader) != "undefined"){
+					//image drag and drop
+					//Chrome and FireFox only
+					window.addEventListener('dragover', function(event){
+						event.preventDefault();
+					}, false);
+					
+					window.addEventListener('drop', function(event){
+						event.preventDefault();
+						
+						var file = event.dataTransfer.files[0];
+						var fileType = file.type;
+						if (!fileType.match(/image\/\w+/)) {
+							$("#debug").text("Only image files supported.");
+							return;
+						}
+						
+						var reader = new FileReader();
+						reader.onload = function(){
+
+							_inputImage = new Image();
+							_inputImage.src = reader.result;
+							
+							_inputImage.onload = function(){
+								onImageLoaded();
+							};
+						};
+						reader.readAsDataURL(file);
+					}, false);
+					
+					//display drag message
+					_context.fillStyle = "#999;"
+					_context.font = "bold 40px sans-serif";
+					_context.textAlign = "center";
+					_context.shadowOffsetX = 1;
+					_context.shadowOffsetY = 1;
+					_context.shadowBlur    = 2;
+					_context.shadowColor   = 'rgba(255, 255, 255, 0.5)';
+					_context.fillText("Drop Image Here", _canvas.width/2, _canvas.height/2);
+				}
+			});
+
+function loadImage(url){
+	_inputImage = new Image();
+	_inputImage.src = url;
+	_inputImage.onload = function() {
+		onImageLoaded();
+	};
+	_inputImage.onerror = function(){
+		$("#debug").text("Image not found.");
+	};
+}
+
+function onImageLoaded() {
+
+	_imageLoaded =  true;
+	_iw = _inputImage.width;
+	_ih = _inputImage.height;
+
+	$("#canvas").attr('width', _iw);
+	$("#canvas").attr('height', _ih);
+
+					//draw to canvas
+					_context.drawImage(_inputImage, 0, 0);
+					$("#debug").text("Image Loaded");
+
+					$("#overlay").css( "line-height", _ih + "px" );
+					$("#overlay").width(_iw);
+					$("#overlay").height(_ih);
+				}
+
+				function glitchImage(){
+					if (!_imageLoaded) return;
+					$("#debug").text("Glitching... ");
+					$("#overlay").toggle();
+				//break into 2 functions to allow status text to update
+				setTimeout(glitchImage2, 0);
+			}
+
+			function glitchImage2(){
+				
+				var start = new Date().getTime();
+				
+				//draw input image to output canvas
+				outputBMD = new BitmapData(_iw, _ih);
+				outputBMD.draw(_inputImage);
+				
+				//init inputBMD
+				inputBMD = new BitmapData(_iw, _ih);
+				inputBMD.draw(_inputImage);
+				var maxOffset = _glitchAmount * _glitchAmount / 100 * _iw;
+				
+				//randomly offset slices horizontally
+				for (i = 0; i < _glitchAmount * 2; i++) {
+
+					var startY = getRandInt(0, _ih);
+					var chunkHeight = getRandInt(1, _ih / 4);
+					chunkHeight = Math.min(chunkHeight, _ih - startY);
+					var offset = getRandInt(-maxOffset, maxOffset);
+
+					if (offset == 0)
+						continue;
+					
+					if (offset < 0) {
+						//shift left
+						outputBMD.copyPixels(inputBMD, new Rectangle(-offset, startY, _iw + offset, chunkHeight), new Point(0, startY));
+						//wrap around
+						outputBMD.copyPixels(inputBMD, new Rectangle(0, startY, -offset, chunkHeight), new Point(_iw + offset,startY));
+
+					} else {
+						//shift right
+						outputBMD.copyPixels(inputBMD, new Rectangle(0, startY, _iw, chunkHeight), new Point(offset, startY));
+						//wrap around
+						outputBMD.copyPixels(inputBMD, new Rectangle(_iw - offset, startY, offset, chunkHeight), new Point(0, startY));
+					}
+				}
+				
+				//do color offset
+				var channel = getRandChannel();
+				outputBMD.copyChannel(inputBMD, new Rectangle(0, 0, _iw, _ih), new Point(getRandInt(-_glitchAmount * 2, _glitchAmount * 2), getRandInt(-_glitchAmount * 2, _glitchAmount * 2)), channel, channel);
+
+				//make brighter
+				//convert 1 - 10 -> 1 -> 2
+				var b = 1 + _brightnessAmount/10*1;
+				var brightMat=[
+				b, 0, 0, 0, 0,
+				0, b, 0, 0, 0,
+				0, 0, b, 0, 0,
+				0, 0, 0, 1, 0
+				];
+				
+				zeroPoint = new Point();
+				brightnessFilter = new ColorMatrixFilter(brightMat);
+				outputBMD.applyFilter(outputBMD, outputBMD.rect, zeroPoint, brightnessFilter);
+
+				if (_useScanLines){
+					//Add Scan Lines
+					var line = new Rectangle(0, 0, _iw, 1);
+					for (i = 0; i < _ih; i++) {
+						if (i % 2 == 0) {
+							line.y = i;
+							outputBMD.fillRect(line, 0);
+						}
+					}
+				}
+
+				//draw to canvas
+				_context.putImageData(outputBMD.data, 0, 0);
+
+				//log time
+				var end = new Date().getTime();
+				$("#debug").text("Completed in  " + Math.round((end - start)/1000)  + " seconds");
+				$("#overlay").toggle();
+			};
+
+			//handle range input
+			function setGlitchValue(v) {
+				_glitchAmount = v;
+			}
+
+			function setBrightnessValue(v) {
+				_brightnessAmount = v;
+			}
+
+			function useScanlines(v) {
+				_useScanLines = $("#scanChk").is(':checked');
+			}
+
+			function getRandInt(min, max) {
+				return (Math.floor(Math.random() * (max - min) + min));
+			}
+			
+			function getRandChannel() {
+				var r = Math.random();
+				if (r < .33){
+					return BitmapDataChannel.GREEN;
+				}else if (r < .66){
+					return BitmapDataChannel.RED;
+				}else{
+					return BitmapDataChannel.BLUE;
+				}
+			}
+			</script>
+		</head>
+		<body>
+			<div id="container">
+				<h1>ImageGlitcher</h1>
+				<p>Use ImageGlitcher to glitch any image and save the result. Drag and Drop an image from the desktop, or click a sample image below.</p>
+
+				<img id="pearl" class="thumb" src="img/thumbs/chief.jpg" width="80" height="80">
+				<img id="klf" class="thumb" src="img/thumbs/klf.jpg" width="80" height="80">
+				<img id="heade" class="thumb" src="img/thumbs/heade.jpg" width="80" height="80">
+				<img id="face" class="thumb" src="img/thumbs/face.jpg" width="80" height="80">
+				<img id="wargames" class="thumb" src="img/thumbs/wargames.jpg" width="80" height="80">
+				<img id="anderson" class="thumb" src="img/thumbs/anderson.jpg" width="80" height="80">     
+				<img id="paramount" class="thumb" src="img/thumbs/paramount.jpg" width="80" height="80">
+				
+				<div id="wrapper">
+					<canvas id="canvas" class="framed" width="640" height="480"></canvas>	
+					<div id="overlay">GLITCHING...</div>
+				</div>
+
+				<div id="buttons">
+					<p>				
+						<a id="glitchImage" class="button" >Glitch It!</a>
+						<a id="saveImage" class="button" >Save Image</a>
+					</p>                	
+				</div>	
+
+				<div id="settings">
+					<p>
+						<p class="option">
+							GLITCHINESS: &nbsp;&nbsp; <input type="range" min="1" max="10" value = "5" onchange="setGlitchValue(this.value)"/>
+						</p>
+						<p class="option">
+							BRIGHTNESS: &nbsp;&nbsp; <input type="range" min="1" max="10" value = "5" onchange="setBrightnessValue(this.value)"/>
+						</p>
+						<p class="option">
+							SCAN LINES: &nbsp;&nbsp; <input type="checkbox" checked id="scanChk" onchange="useScanlines()"/>
+						</p>
+					</p>
+				</div>
+			</body>
+			</html>
