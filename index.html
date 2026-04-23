@@ -84,6 +84,10 @@
 				    _context.clearRect(0, 0, _canvas.width, _canvas.height);
 				    _context.drawImage(_originalImage, 0, 0);
 					});
+
+					$(".thumb").click( function() {
+					loadImage("img/" + this.id + ".jpg");
+				});
 					
 					//detect for filereader drag and drop support
 					if (typeof(FileReader) != "undefined"){
@@ -151,7 +155,7 @@
 						//draw to canvas
 						_originalImage = new Image();
 						_originalImage.src = _inputImage.src;
-						_context.drawImage(_inputImage, 0, 0);
+						_context.drawImage(_inputImage, 0, 0);	
 						$("#debug").text("Image Loaded");
 
 						$("#overlay").css( "line-height", _ih + "px" );
@@ -277,7 +281,7 @@
 					<h1>ImageGlitcher</h1>
 					<p>Use ImageGlitcher to glitch any image and save the result. Drag and Drop an image from the desktop, or click a sample image below.</p>
 
-					<img id="pearl" class="thumb" src="img/thumbs/chief.jpg" width="80" height="80">
+					<img id="chief" class="thumb" src="img/thumbs/chief.jpg" width="80" height="80">
 					<img id="klf" class="thumb" src="img/thumbs/klf.jpg" width="80" height="80">
 					<img id="heade" class="thumb" src="img/thumbs/heade.jpg" width="80" height="80">
 					<img id="face" class="thumb" src="img/thumbs/face.jpg" width="80" height="80">
